@@ -1,16 +1,17 @@
 {
   "dependencies": {
+    "axios": "^1.7.5",
     "body-parser": "^1.20.2",
     "bullmq": "^5.12.12",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "rate-limiter-flexible": "^5.0.3",
+    "redis": "^4.7.0",
     "telegraf": "^4.16.3"
   },
   "name": "weebhook",
   "version": "1.0.0",
   "main": "server.js",
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"

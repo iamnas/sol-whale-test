@@ -1,102 +1,96 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const { Queue, Worker } = require('bullmq');
-const { RateLimiterMemory } = require('rate-limiter-flexible');
-const { Telegraf } = require('telegraf');
+const redis = require('redis');
+const axios = require('axios');
+
+// Load environment variables from .env file
 require('dotenv').config();
 
 const app = express();
 app.use(bodyParser.json());
 
-// Setup rate limiter
-const rateLimiter = new RateLimiterMemory({
-    points: 10, // 10 requests
-    duration: 1, // per second
+const redisClient = redis.createClient({
+  url: process.env.REDIS_URL, // Use REDIS_URL from environment variables
 });
 
-// Redis connection string
-const redisConnectionString = process.env.REDIS_URL ;
+redisClient.on('error', (err) => console.log('Redis Client Error', err));
 
+(async () => {
+  await redisClient.connect();
+  console.log('Connected to Redis successfully!');
+})();
 
-// Bull queue setup
-const alertQueue = new Queue('alert-queue', {
-    connection: redisConnectionString,
-});
-
-
-
-// Telegram bot setup
-const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
-const THRESHOLD_AMOUNT = parseInt(process.env.THRESHOLD_AMOUNT);
-
-// Webhook endpoint
-app.post('/alert/webhook', async (req, res) => {
-    const payload = req.body;
-    //   console.log(req);
-
-    const signature = payload[0]?.signature;
-
-    try {
-        await rateLimiter.consume(signature);
-
-        const tokenTransfers = payload[0].tokenTransfers || [];
-        for (const transfer of tokenTransfers) {
-            if (transfer.tokenAmount > THRESHOLD_AMOUNT && transfer.mint === process.env.USDC_ADDRESS) {
-                await alertQueue.add('sendWhaleAlert', {
-                    signature,
-                    amount: transfer.tokenAmount,
-                    from: transfer.fromUserAccount,
-                    to: transfer.toUserAccount,
-                    mint: transfer.mint,
-                });
-            }
-        }
-
-        res.json({ message: 'Webhook received successfully' });
-    } catch (rateLimiterRes) {
-        res.status(429).json({ message: 'Too many requests' });
-    }
-});
+// Initialize the tokenLogs array to keep track of processed transactions
+let tokenLogs = [];
 
 app.get('/',(req, res) =>{
     res.json({ message: 'Webhook received successfully' });
 })
 
-// Bull worker setup
-const worker = new Worker('alert-queue', async job => {
-    const { signature, amount, from, to, mint } = job.data;
-    await sendWhaleAlert(signature, amount, from, to, mint);
-}, {
-    connection: {
-        host: 'localhost',
-        port: 6379,
-    },
-});
 
-// Function to send whale alert via Telegram
-async function sendWhaleAlert(signature, amount, from, to, mint) {
-    const message = `
+app.post('/alert/webhook', async (req, res) => {
+  try {
+    const payload = req.body;
+    const signature = payload[0]?.signature;
+
+    // Check if the webhook has already been processed
+    if (tokenLogs.includes(signature)) {
+      return res.status(200).json({ message: 'Webhook already processed' });
+    }
+
+    const tokenTransfers = payload[0].tokenTransfers || [];
+
+    for (const transfer of tokenTransfers) {
+      if (
+        transfer.tokenAmount > parseInt(process.env.THRESHOLD_AMOUNT) &&
+        transfer.mint === process.env.USDC_ADDRESS
+      ) {
+        // Send whale alert
+        const message = `
 🚨 *Whale Alert* 🚨
 
 💸 *Transaction*: [🅃](https://solscan.io/tx/${signature}) \`${signature}\`
 
-💰 *Amount*: \`${amount.toLocaleString()} USDC \`
+💰 *Amount*: \`${transfer.tokenAmount.toLocaleString()} USDC\`
 
-🔄 *From*: [🅵](https://solscan.io/account/${from}) \`${from}\`
+🔄 *From*: [🅵](https://solscan.io/account/${transfer.fromUserAccount}) \`${transfer.fromUserAccount}\`
 
-🔜 *To*: [🅸](https://solscan.io/account/${to}) \`${to}\`
+🔜 *To*: [🅸](https://solscan.io/account/${transfer.toUserAccount}) \`${transfer.toUserAccount}\`
 
-💳 *Mint*: [🅼](https://solscan.io/token/${mint}) \`${mint}\`
+💳 *Mint*: [🅼](https://solscan.io/token/${transfer.mint}) \`${transfer.mint}\`
 
 👥 *Join our Telegram group*: [@whalealert](https://t.me/whalealert)
 `;
 
-    await bot.telegram.sendMessage(process.env.CHATID, message, {
-        parse_mode: 'Markdown',
+        await redisClient.set(signature, message);
+        tokenLogs.push(signature);
+
+        await sendTelegramAlert(message);
+      }
+    }
+
+    res.status(200).json({ message: 'Webhook received successfully' });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+async function sendTelegramAlert(message) {
+  const telegramApiUrl = `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`;
+  try {
+    await axios.post(telegramApiUrl, {
+      chat_id: process.env.CHATID,
+      text: message,
+      parse_mode: 'Markdown',
     });
+  } catch (error) {
+    console.error('Error sending Telegram message:', error);
+  }
 }
 
+// Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
