@@ -15,7 +15,7 @@ const rateLimiter = new RateLimiterMemory({
 });
 
 // Redis connection string
-const redisConnectionString = process.env.REDIS_URL || 'redis://localhost:6379';
+const redisConnectionString = process.env.REDIS_URL ;
 
 
 // Bull queue setup
