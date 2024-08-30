@@ -58,6 +58,10 @@ app.post('/alert/webhook', async (req, res) => {
     }
 });
 
+app.get('/',(req, res) =>{
+    res.json({ message: 'Webhook received successfully' });
+})
+
 // Bull worker setup
 const worker = new Worker('alert-queue', async job => {
     const { signature, amount, from, to, mint } = job.data;
