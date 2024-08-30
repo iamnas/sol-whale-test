@@ -6,5 +6,17 @@
     "express": "^4.19.2",
     "rate-limiter-flexible": "^5.0.3",
     "telegraf": "^4.16.3"
-  }
+  },
+  "name": "weebhook",
+  "version": "1.0.0",
+  "main": "server.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
 }
