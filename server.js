@@ -59,8 +59,8 @@ app.post('/alert/webhook', async (req, res) => {
 
 💳 *Mint*: [🅼](https://solscan.io/token/${transfer.mint}) \`${transfer.mint}\`
 
-👥 *Join our Telegram group*: [@whalealert](https://t.me/whalealert)
 `;
+// 👥 *Join our Telegram group*: [@whalealert](https://t.me/whalealert)
 
         await redisClient.set(signature, message);
         tokenLogs.push(signature);
