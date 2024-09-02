@@ -11,6 +11,7 @@ app.use(bodyParser.json());
 
 const redisClient = redis.createClient({
   url: process.env.REDIS_URL, // Use REDIS_URL from environment variables
+  pingInterval: 3000,
 });
 
 redisClient.on('error', (err) => console.log('Redis Client Error', err));
