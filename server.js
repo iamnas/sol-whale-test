@@ -9,23 +9,48 @@ require('dotenv').config();
 const app = express();
 app.use(bodyParser.json());
 
+// const redisClient = redis.createClient({
+//   url: process.env.REDIS_URL, // Use REDIS_URL from environment variables
+//   pingInterval: 3000,
+// });
+
+// redisClient.on('error', (err) => console.log('Redis Client Error', err));
+
+// (async () => {
+//   await redisClient.connect();
+//   console.log('Connected to Redis successfully!');
+// })();
 const redisClient = redis.createClient({
-  url: process.env.REDIS_URL, // Use REDIS_URL from environment variables
-  pingInterval: 3000,
+  url: process.env.REDIS_URL,
+  socket: {
+    reconnectStrategy: (retries) => {
+      if (retries >= 10) {
+        return new Error('Redis connection attempts exceeded');
+      }
+      console.log(`Reconnecting to Redis: attempt #${retries}`);
+      return Math.min(retries * 100, 3000); // Exponential backoff
+    },
+    tls: true,
+  },
 });
 
 redisClient.on('error', (err) => console.log('Redis Client Error', err));
+redisClient.on('reconnecting', () => console.log('Reconnecting to Redis...'));
 
 (async () => {
-  await redisClient.connect();
-  console.log('Connected to Redis successfully!');
+  try {
+    await redisClient.connect();
+    console.log('Connected to Redis successfully!');
+  } catch (err) {
+    console.error('Failed to connect to Redis:', err);
+  }
 })();
 
 // Initialize the tokenLogs array to keep track of processed transactions
 let tokenLogs = [];
 
-app.get('/',(req, res) =>{
-    res.json({ message: 'Webhook received successfully' });
+app.get('/', (req, res) => {
+  res.json({ message: 'Webhook received successfully' });
 })
 
 
@@ -61,7 +86,7 @@ app.post('/alert/webhook', async (req, res) => {
 💳 *Mint*: [🅼](https://solscan.io/token/${transfer.mint}) \`${transfer.mint}\`
 
 `;
-// 👥 *Join our Telegram group*: [@whalealert](https://t.me/whalealert)
+        // 👥 *Join our Telegram group*: [@whalealert](https://t.me/whalealert)
 
         await redisClient.set(signature, message);
         tokenLogs.push(signature);
